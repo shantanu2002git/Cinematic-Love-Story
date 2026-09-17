@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "A Love Story"
+description = "A cinematic, interactive romantic website designed as a private digital love story, with immersive motion, memories, photos, theme switching, and a floating music experience."
+version = "1.0.0"
+id = "artifacts/love-story"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21740
+
+[services.development]
+run = "pnpm --filter @workspace/love-story run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/love-story", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/love-story/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21740"
+BASE_PATH = "/"
