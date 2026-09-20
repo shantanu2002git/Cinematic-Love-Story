@@ -197,6 +197,13 @@
 .timeline-intro { position: sticky; top: 120px; align-self: start; }
 .timeline-intro .body-copy { max-width: 270px; margin-top: 1.8rem; }
 .timeline-list { border-top: 1px solid hsl(var(--border)); }
+.story-skeleton-list { display: grid; gap: 1px; }
+.story-skeleton { position: relative; overflow: hidden; background: hsl(var(--muted)); }
+.story-skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, hsl(var(--card) / .7), transparent); animation: story-skeleton-shimmer 1.2s infinite; }
+.timeline-skeleton { height: 163px; border-bottom: 1px solid hsl(var(--border)); }
+.story-skeleton-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; }
+.photo-skeleton { grid-column: span 7; min-height: 260px; }
+@keyframes story-skeleton-shimmer { 100% { transform: translateX(100%); } }
 .timeline-item { display: grid; grid-template-columns: 128px 1fr; gap: 2rem; padding: 2.2rem 0; border-bottom: 1px solid hsl(var(--border)); }
 .timeline-date { color: hsl(var(--primary)); font: 700 .61rem var(--app-font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .timeline-item h3 { margin: 0; font: 600 clamp(1.65rem, 3vw, 2.35rem)/.95 var(--app-font-serif); letter-spacing: -.025em; }

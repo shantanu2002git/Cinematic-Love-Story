@@ -28,6 +28,8 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
+const storyApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const storyApiUrl = `${storyApiBaseUrl}/api/story`;
 
 type Photo = {
   id: string;
@@ -40,54 +42,20 @@ type Photo = {
 
 const initialPhotos: Photo[] = [
   {
-    id: 'morning-light',
-    title: 'Morning light',
-    place: 'Lisbon, 07:42',
+    id: 'lotus-flower',
+    title: 'A quiet bloom',
+    place: 'A moment worth keeping',
     category: 'moments',
-    src: 'https://images.pexels.com/photos/1025469/pexels-photo-1025469.jpeg?auto=compress&cs=tinysrgb&w=1400',
-    description: 'A soft morning we wanted to keep.',
-  },
-  {
-    id: 'salt-air',
-    title: 'Salt air',
-    place: 'Cascais, August',
-    category: 'memories',
-    src: 'https://images.pexels.com/photos/3225531/pexels-photo-3225531.jpeg?auto=compress&cs=tinysrgb&w=1400',
-    description: 'Salt on our skin and nowhere else to be.',
-  },
-  {
-    id: 'slow-sunday',
-    title: 'Slow Sunday',
-    place: 'At home',
-    category: 'forever',
-    src: 'https://images.pexels.com/photos/3768126/pexels-photo-3768126.jpeg?auto=compress&cs=tinysrgb&w=1400',
-    description: 'The quiet luxury of a slow Sunday.',
-  },
-  {
-    id: 'golden-hour',
-    title: 'The golden hour',
-    place: 'Somewhere west',
-    category: 'memories',
-    src: 'https://images.pexels.com/photos/3014019/pexels-photo-3014019.jpeg?auto=compress&cs=tinysrgb&w=1400',
-    description: 'We stayed until the sky changed its mind.',
-  },
-  {
-    id: 'two-coffees',
-    title: 'Two coffees',
-    place: 'Our kitchen, 09:16',
-    category: 'forever',
-    src: 'https://images.pexels.com/photos/1002740/pexels-photo-1002740.jpeg?auto=compress&cs=tinysrgb&w=1400',
-    description: 'Two coffees, one shared morning.',
+    src: '/lotus-flower.jpg',
+    description: 'A little stillness, held in one frame.',
   },
 ];
 
 type TimelineItem = { date: string; title: string; copy: string };
+type StoryPayload = { photos: Photo[]; coordinates: TimelineItem[] };
 
 const initialTimeline: TimelineItem[] = [
   { date: '03 / 18 / 19', title: 'The first hello', copy: 'A crowded room, a borrowed pen, and the strange certainty that I wanted to hear the rest of your story.' },
-  { date: '08 / 02 / 20', title: 'The long way home', copy: 'We missed the last train and walked until the city softened around us. I have loved detours ever since.' },
-  { date: '11 / 27 / 21', title: 'A little apartment', copy: 'Two mugs, one window, a plant we nearly forgot to water. It felt like a beginning with the lights already on.' },
-  { date: '06 / 14 / 23', title: 'The yes of it all', copy: 'Not one enormous moment. A thousand small yeses, quietly adding up to a life I would choose again.' },
 ];
 
 const reasons = [
@@ -99,6 +67,8 @@ const reasons = [
 
 ];
 
+const archiveVersion = 'single-static-record-v1';
+
 function readStored<T>(key: string, fallback: T): T {
   try {
     const stored = window.localStorage.getItem(key);
@@ -106,6 +76,25 @@ function readStored<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+async function saveStory(payload: StoryPayload): Promise<void> {
+  const response = await fetch(storyApiUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`Story save failed: ${response.status}`);
+}
+
+function readInitialArchive<T>(key: string, fallback: T): T {
+  if (window.localStorage.getItem('love-story-archive-version') !== archiveVersion) {
+    window.localStorage.removeItem('love-story-photos');
+    window.localStorage.removeItem('love-story-timeline');
+    window.localStorage.setItem('love-story-archive-version', archiveVersion);
+    return fallback;
+  }
+  return readStored(key, fallback);
 }
 
 function Home() {
@@ -119,8 +108,9 @@ function Home() {
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReading, setIsReading] = useState(false);
-  const [photos, setPhotos] = useState<Photo[]>(() => readStored<Photo[]>('love-story-photos', initialPhotos).map(photo => ({ ...photo, category: photo.category === 'memories' || photo.category === 'forever' ? photo.category : 'moments' })));
-  const [timeline, setTimeline] = useState<TimelineItem[]>(() => readStored('love-story-timeline', initialTimeline));
+  const [isStoryLoading, setIsStoryLoading] = useState(true);
+  const [photos, setPhotos] = useState<Photo[]>(() => readInitialArchive('love-story-photos', initialPhotos));
+  const [timeline, setTimeline] = useState<TimelineItem[]>(() => readInitialArchive('love-story-timeline', initialTimeline));
   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
   const [isAddingFeeling, setIsAddingFeeling] = useState(false);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -131,9 +121,42 @@ function Home() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const letterButtonRef = useRef<HTMLButtonElement>(null);
+  const hasLoadedFromApi = useRef(false);
 
   useEffect(() => { window.localStorage.setItem('love-story-photos', JSON.stringify(photos)); }, [photos]);
   useEffect(() => { window.localStorage.setItem('love-story-timeline', JSON.stringify(timeline)); }, [timeline]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadStory = async () => {
+      try {
+        const response = await fetch(storyApiUrl, { signal: AbortSignal.timeout(1200) });
+        if (!response.ok) throw new Error(`Story request failed: ${response.status}`);
+        const stored = await response.json() as StoryPayload;
+        if (cancelled) return;
+        if (stored.photos.length || stored.coordinates.length) {
+          setPhotos(stored.photos);
+          setTimeline(stored.coordinates);
+        } else {
+          await saveStory({ photos, coordinates: timeline }).catch(() => undefined);
+        }
+      } catch {
+        // Local storage remains the offline fallback when the API is unavailable.
+      } finally {
+        if (!cancelled) {
+          hasLoadedFromApi.current = true;
+          setIsStoryLoading(false);
+        }
+      }
+    };
+    void loadStory();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedFromApi.current) return;
+    void saveStory({ photos, coordinates: timeline }).catch(() => undefined);
+  }, [photos, timeline]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume / 100;
@@ -351,8 +374,8 @@ function Home() {
             <h2 className="section-heading" id="days-title">A few<br /><em>coordinates.</em></h2>
             <p className="body-copy">The dates are only pins on a map. The real story is everything that happened between them.</p>
           </div>
-          <div className="timeline-list stagger">
-            {timeline.map(item => (
+          <div className={`timeline-list stagger ${isStoryLoading ? 'loading-list' : ''}`}>
+            {isStoryLoading ? <div className="story-skeleton-list" aria-label="Loading coordinates"><div className="story-skeleton timeline-skeleton" /><div className="story-skeleton timeline-skeleton" /></div> : timeline.map(item => (
               <article className="timeline-item" key={item.date} data-testid={`timeline-item-${item.date.replaceAll(' ', '-')}`}>
                 {editingDate === item.date ? <form className="inline-edit" onSubmit={event => updateTimeline(item.date, event)}><input name="date" defaultValue={item.date} aria-label="Feeling date" /><input name="title" defaultValue={item.title} aria-label="Feeling title" /><textarea name="copy" defaultValue={item.copy} aria-label="Feeling description" rows={3} /><button className="text-button filled" type="submit"><Save size={14} /> Save</button></form> : <><div className="timeline-date">{item.date}</div><div><div className="timeline-title-row"><h3>{item.title}</h3><button className="edit-row-button" type="button" onClick={() => setActionDate(actionDate === item.date ? null : item.date)} aria-expanded={actionDate === item.date}>Edit</button>{actionDate === item.date && <span className="row-actions"><button className="mini-button" type="button" onClick={() => setEditingDate(item.date)} aria-label={`Edit ${item.title}`}><Pencil size={14} /></button><button className="mini-button danger" type="button" onClick={() => deleteTimeline(item.date)} aria-label={`Delete ${item.title}`}><Trash2 size={14} /></button></span>}</div><p>{item.copy}</p></div></>}
               </article>
@@ -389,7 +412,7 @@ function Home() {
             ))}
           </div>
           <div className="gallery-grid reveal" style={{ marginTop: '1.2rem' }}>
-            {filteredPhotos.map(photo => (
+            {isStoryLoading ? <div className="story-skeleton-grid" aria-label="Loading photos"><div className="story-skeleton photo-skeleton" /></div> : filteredPhotos.map(photo => (
               <button
                 className="gallery-item"
                 type="button"
