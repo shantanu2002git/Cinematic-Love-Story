@@ -15,7 +15,11 @@ import {
   Music2,
   Pause,
   Play,
+  Plus,
+  Pencil,
+  Save,
   Sun,
+  Trash2,
   Volume2,
   VolumeX,
   X,
@@ -29,49 +33,57 @@ type Photo = {
   id: string;
   title: string;
   place: string;
-  category: 'all' | 'quiet' | 'wild' | 'ordinary';
+  category: 'moments' | 'memories' | 'forever';
   src: string;
+  description: string;
 };
 
-const photos: Photo[] = [
+const initialPhotos: Photo[] = [
   {
     id: 'morning-light',
     title: 'Morning light',
     place: 'Lisbon, 07:42',
-    category: 'quiet',
+    category: 'moments',
     src: 'https://images.pexels.com/photos/1025469/pexels-photo-1025469.jpeg?auto=compress&cs=tinysrgb&w=1400',
+    description: 'A soft morning we wanted to keep.',
   },
   {
     id: 'salt-air',
     title: 'Salt air',
     place: 'Cascais, August',
-    category: 'wild',
+    category: 'memories',
     src: 'https://images.pexels.com/photos/3225531/pexels-photo-3225531.jpeg?auto=compress&cs=tinysrgb&w=1400',
+    description: 'Salt on our skin and nowhere else to be.',
   },
   {
     id: 'slow-sunday',
     title: 'Slow Sunday',
     place: 'At home',
-    category: 'ordinary',
+    category: 'forever',
     src: 'https://images.pexels.com/photos/3768126/pexels-photo-3768126.jpeg?auto=compress&cs=tinysrgb&w=1400',
+    description: 'The quiet luxury of a slow Sunday.',
   },
   {
     id: 'golden-hour',
     title: 'The golden hour',
     place: 'Somewhere west',
-    category: 'wild',
+    category: 'memories',
     src: 'https://images.pexels.com/photos/3014019/pexels-photo-3014019.jpeg?auto=compress&cs=tinysrgb&w=1400',
+    description: 'We stayed until the sky changed its mind.',
   },
   {
     id: 'two-coffees',
     title: 'Two coffees',
     place: 'Our kitchen, 09:16',
-    category: 'ordinary',
+    category: 'forever',
     src: 'https://images.pexels.com/photos/1002740/pexels-photo-1002740.jpeg?auto=compress&cs=tinysrgb&w=1400',
+    description: 'Two coffees, one shared morning.',
   },
 ];
 
-const timeline = [
+type TimelineItem = { date: string; title: string; copy: string };
+
+const initialTimeline: TimelineItem[] = [
   { date: '03 / 18 / 19', title: 'The first hello', copy: 'A crowded room, a borrowed pen, and the strange certainty that I wanted to hear the rest of your story.' },
   { date: '08 / 02 / 20', title: 'The long way home', copy: 'We missed the last train and walked until the city softened around us. I have loved detours ever since.' },
   { date: '11 / 27 / 21', title: 'A little apartment', copy: 'Two mugs, one window, a plant we nearly forgot to water. It felt like a beginning with the lights already on.' },
@@ -79,16 +91,27 @@ const timeline = [
 ];
 
 const reasons = [
-  ['01', 'You make the ordinary luminous', 'Even grocery lists feel like little maps to somewhere worth going.'],
+  ['01', 'You make distance feel smaller', 'No matter how busy the day gets, a few words from you always make me feel closer.'],
   ['02', 'You listen with your whole face', 'The way you look at a story makes people brave enough to finish it.'],
   ['03', 'You are my favourite kind of brave', 'Soft where the world says hard. Honest where it would be easier to perform.'],
   ['04', 'You keep making room', 'For new songs, new people, new plans, and for me to become more myself.'],
+  ['05', 'You make me smile without trying', 'A photo, a sticker, or even a short text from you can brighten my whole day.'],
+
 ];
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function Home() {
   const [isDark, setIsDark] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<Photo['category']>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | Photo['category']>('all');
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(23);
@@ -96,7 +119,34 @@ function Home() {
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReading, setIsReading] = useState(false);
+  const [photos, setPhotos] = useState<Photo[]>(() => readStored<Photo[]>('love-story-photos', initialPhotos).map(photo => ({ ...photo, category: photo.category === 'memories' || photo.category === 'forever' ? photo.category : 'moments' })));
+  const [timeline, setTimeline] = useState<TimelineItem[]>(() => readStored('love-story-timeline', initialTimeline));
+  const [isAddingPhoto, setIsAddingPhoto] = useState(false);
+  const [isAddingFeeling, setIsAddingFeeling] = useState(false);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [actionDate, setActionDate] = useState<string | null>(null);
+  const [showMusic, setShowMusic] = useState(true);
+  const [photoForm, setPhotoForm] = useState({ title: '', place: '', description: '', category: 'moments' as Photo['category'], src: '' });
+  const [feelingForm, setFeelingForm] = useState({ date: '', title: '', copy: '' });
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const letterButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => { window.localStorage.setItem('love-story-photos', JSON.stringify(photos)); }, [photos]);
+  useEffect(() => { window.localStorage.setItem('love-story-timeline', JSON.stringify(timeline)); }, [timeline]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume / 100;
+  }, [volume]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      void audioRef.current.play().catch(() => setIsPlaying(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('love-story-theme');
@@ -145,7 +195,7 @@ function Home() {
 
   const filteredPhotos = useMemo(
     () => activeFilter === 'all' ? photos : photos.filter(photo => photo.category === activeFilter),
-    [activeFilter],
+    [activeFilter, photos],
   );
 
   const movePhoto = (direction: number) => {
@@ -175,6 +225,40 @@ function Home() {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(reading);
     setIsReading(true);
+  };
+
+  const openPhotoForm = () => { setPhotoForm({ title: '', place: '', description: '', category: 'moments', src: '' }); setIsAddingPhoto(true); };
+  const handlePhotoFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhotoForm(form => ({ ...form, src: String(reader.result) }));
+    reader.readAsDataURL(file);
+  };
+  const addPhoto = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!photoForm.src || !photoForm.title.trim()) return;
+    const photo: Photo = { ...photoForm, id: `local-${Date.now()}`, title: photoForm.title.trim(), place: photoForm.place.trim() || 'From our archive', description: photoForm.description.trim() || 'A moment worth keeping.' };
+    setPhotos(current => [...current, photo]);
+    setIsAddingPhoto(false);
+  };
+  const addFeeling = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!feelingForm.date.trim() || !feelingForm.title.trim() || !feelingForm.copy.trim()) return;
+    setTimeline(current => [...current, { date: feelingForm.date.trim(), title: feelingForm.title.trim(), copy: feelingForm.copy.trim() }]);
+    setFeelingForm({ date: '', title: '', copy: '' });
+    setIsAddingFeeling(false);
+  };
+  const updateTimeline = (oldDate: string, event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setTimeline(current => current.map(item => item.date === oldDate ? { date: String(form.get('date')), title: String(form.get('title')), copy: String(form.get('copy')) } : item));
+    setEditingDate(null);
+    setActionDate(null);
+  };
+  const deleteTimeline = (date: string) => {
+    setTimeline(current => current.filter(item => item.date !== date));
+    setActionDate(null);
   };
 
   const copyLine = async () => {
@@ -239,8 +323,8 @@ function Home() {
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-content reveal">
           <div className="eyebrow">An ongoing correspondence</div>
-          <h1 id="hero-title">For the one<br />who makes <em>home</em><br />feel like a verb.</h1>
-          <p className="hero-intro">This is a small archive of the big, beautiful thing we keep making — one ordinary day at a time.</p>
+          <h1 id="hero-title">Before U<br />They were just days <em>With you</em><br />they became memories.</h1>
+          <p className="hero-intro">This is our story — written through messages, laughter, waiting, and all the moments in between.</p>
         </div>
         <div className="hero-stamp" aria-hidden="true">made<br />with<br />all my heart</div>
         <div className="hero-scroll" aria-hidden="true">scroll to wander</div>
@@ -251,7 +335,7 @@ function Home() {
           <div className="opening-copy reveal">
             <div className="section-kicker">01 / The beginning</div>
             <h2 className="section-heading" id="beginning-title">It started<br /><em>quietly.</em></h2>
-            <p className="body-copy">No grand entrance. No perfectly timed soundtrack. Just you, laughing at something no one else heard, and me realizing that I wanted to be near that sound for a very long time.</p>
+            <p className="body-copy">Who knew a simple "Hi" could become thousands of messages, countless smiles, and one of the best parts of my life?</p>
           </div>
           <aside className="hand-note reveal" aria-label="A handwritten note">
             <p>“I knew it in the pauses — the comfortable ones, the ones where nothing needed fixing.”</p>
@@ -270,13 +354,11 @@ function Home() {
           <div className="timeline-list stagger">
             {timeline.map(item => (
               <article className="timeline-item" key={item.date} data-testid={`timeline-item-${item.date.replaceAll(' ', '-')}`}>
-                <div className="timeline-date">{item.date}</div>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.copy}</p>
-                </div>
+                {editingDate === item.date ? <form className="inline-edit" onSubmit={event => updateTimeline(item.date, event)}><input name="date" defaultValue={item.date} aria-label="Feeling date" /><input name="title" defaultValue={item.title} aria-label="Feeling title" /><textarea name="copy" defaultValue={item.copy} aria-label="Feeling description" rows={3} /><button className="text-button filled" type="submit"><Save size={14} /> Save</button></form> : <><div className="timeline-date">{item.date}</div><div><div className="timeline-title-row"><h3>{item.title}</h3><button className="edit-row-button" type="button" onClick={() => setActionDate(actionDate === item.date ? null : item.date)} aria-expanded={actionDate === item.date}>Edit</button>{actionDate === item.date && <span className="row-actions"><button className="mini-button" type="button" onClick={() => setEditingDate(item.date)} aria-label={`Edit ${item.title}`}><Pencil size={14} /></button><button className="mini-button danger" type="button" onClick={() => deleteTimeline(item.date)} aria-label={`Delete ${item.title}`}><Trash2 size={14} /></button></span>}</div><p>{item.copy}</p></div></>}
               </article>
             ))}
+            <button className="add-entry-button" type="button" onClick={() => setIsAddingFeeling(true)}><Plus size={16} /> Add a feeling</button>
+            {isAddingFeeling && <form className="entry-form" onSubmit={addFeeling}><div className="form-heading">Add a feeling</div><input value={feelingForm.date} onChange={event => setFeelingForm({ ...feelingForm, date: event.target.value })} placeholder="Date, e.g. 09 / 20 / 26" aria-label="New feeling date" /><input value={feelingForm.title} onChange={event => setFeelingForm({ ...feelingForm, title: event.target.value })} placeholder="A small title" aria-label="New feeling title" /><textarea value={feelingForm.copy} onChange={event => setFeelingForm({ ...feelingForm, copy: event.target.value })} placeholder="What do you want to remember?" aria-label="New feeling description" rows={3} /><div className="form-actions"><button className="text-button filled" type="submit"><Save size={14} /> Add feeling</button><button className="text-button" type="button" onClick={() => setIsAddingFeeling(false)}>Cancel</button></div></form>}
           </div>
         </div>
       </section>
@@ -288,10 +370,12 @@ function Home() {
               <div className="section-kicker">03 / Field notes</div>
               <h2 className="section-heading" id="frames-title">The beautiful<br /><em>in-between.</em></h2>
             </div>
-            <Camera size={42} strokeWidth={1} color="hsl(var(--primary))" aria-hidden="true" />
+            <button className="add-photo-button" type="button" onClick={openPhotoForm} aria-label="Add a photo"><Camera size={32} strokeWidth={1} /><Plus size={15} /></button>
           </div>
+          <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoFile} hidden />
+          {isAddingPhoto && <form className="photo-form" onSubmit={addPhoto}><div className="form-heading">Add a frame</div><button className="upload-dropzone" type="button" onClick={() => photoInputRef.current?.click()}>{photoForm.src ? <img src={photoForm.src} alt="Selected preview" /> : <><Plus size={20} /><span>Choose a photo</span></>}</button><input value={photoForm.title} onChange={event => setPhotoForm({ ...photoForm, title: event.target.value })} placeholder="Photo title" aria-label="Photo title" /><input value={photoForm.place} onChange={event => setPhotoForm({ ...photoForm, place: event.target.value })} placeholder="Place or little detail" aria-label="Photo place" /><textarea value={photoForm.description} onChange={event => setPhotoForm({ ...photoForm, description: event.target.value })} placeholder="What should this photo remember?" aria-label="Photo description" rows={3} /><select value={photoForm.category} onChange={event => setPhotoForm({ ...photoForm, category: event.target.value as Photo['category'] })} aria-label="Photo collection"><option value="moments">Moments</option><option value="memories">Memories</option><option value="forever">Forever</option></select><div className="form-actions"><button className="text-button filled" type="submit"><Save size={14} /> Add photo</button><button className="text-button" type="button" onClick={() => setIsAddingPhoto(false)}>Cancel</button></div></form>}
           <div className="filters" role="group" aria-label="Filter memories">
-            {(['all', 'quiet', 'wild', 'ordinary'] as const).map(filter => (
+            {(['all', 'moments', 'memories', 'forever'] as const).map(filter => (
               <button
                 type="button"
                 className={`filter-button ${activeFilter === filter ? 'active' : ''}`}
@@ -300,7 +384,7 @@ function Home() {
                 aria-pressed={activeFilter === filter}
                 data-testid={`button-filter-${filter}`}
               >
-                {filter === 'all' ? 'All frames' : filter}
+                {filter === 'all' ? 'All' : filter[0].toUpperCase() + filter.slice(1)}
               </button>
             ))}
           </div>
@@ -328,7 +412,7 @@ function Home() {
       <section className="section quote-section" aria-label="A love note">
         <div className="section-inner quote-wrap reveal">
           <div className="section-kicker">04 / The thesis</div>
-          <p className="quote-text">“I would find you in every <em>lifetime</em>, and I would still take the long way home.”</p>
+          <p className="quote-text">“Even in a crowded world of <em>billions</em>, my heart would still recognize yours.”</p>
           <div className="quote-meta">a promise, written in the margins</div>
         </div>
       </section>
@@ -362,9 +446,11 @@ function Home() {
             </div>
             <div className="letter-body">
               <p>My love,</p>
-              <p>I hope you know that I notice it all: the way you leave the last bite for me, the little dance you do when a song catches you off guard, the courage it takes to remain tender.</p>
-              <p>Thank you for making a life that feels less like a destination and more like a conversation. I am still listening. I am still choosing you. I will keep choosing you.</p>
-              <p className="letter-sign">Always yours,</p>
+              <p>I still remember your message on Facebook. It was just a simple conversation, but somehow it stayed in my mind. Then one day, without me even asking, you shared your phone number. After that, you disappeared from Facebook within a couple of days.</p>
+              <p>Sometimes you got angry over a few words, and sometimes I did too. But somehow, after every misunderstanding, one of us would text first and the conversation would continue. Some days you messaged me first, some days I messaged you first, but neither of us let the silence stay for too long.</p>
+              <p>Looking back now, I realize it was never just about the messages. It was about having someone whose notification could change my mood, someone whose words I looked for throughout the day, and someone who slowly became an important part of my life.
+</p>
+                <p className="letter-sign">Always yours,</p>
               <div className="letter-actions">
                 <button className="text-button filled" type="button" onClick={readLetter} ref={letterButtonRef} data-testid="button-read-letter">
                   {isReading ? <Pause size={14} /> : <Play size={14} />}
@@ -387,7 +473,9 @@ function Home() {
         <p className="footer-note">Made for one extraordinary person.<br />No ending planned.</p>
       </footer>
 
-      <aside className="music-dock" aria-label="Music player">
+      <audio ref={audioRef} src="/love-story-soundtrack.mp3" loop preload="metadata" onEnded={() => setIsPlaying(false)} />
+      {showMusic && <aside className="music-dock" aria-label="Music player">
+        <button className="music-close" type="button" onClick={() => { setIsPlaying(false); setShowMusic(false); }} aria-label="Close music player"><X size={14} /></button>
         <button
           className="music-button"
           type="button"
@@ -406,7 +494,7 @@ function Home() {
           {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           <input className="volume" type="range" min="0" max="100" value={volume} onChange={event => setVolume(Number(event.target.value))} aria-label="Volume" data-testid="input-music-volume" />
         </label>
-      </aside>
+      </aside>}
 
       {selectedPhoto && (
         <div className="lightbox" role="dialog" aria-modal="true" aria-label={selectedPhoto.title} onClick={() => setSelectedPhoto(null)}>
@@ -418,7 +506,7 @@ function Home() {
           </button>
           <figure className="lightbox-figure" onClick={event => event.stopPropagation()}>
             <img src={selectedPhoto.src} alt={selectedPhoto.title} />
-            <figcaption>{selectedPhoto.title} / {selectedPhoto.place}</figcaption>
+            <figcaption>{selectedPhoto.title} / {selectedPhoto.place}<span className="lightbox-description">{selectedPhoto.description}</span></figcaption>
           </figure>
           <button className="icon-button" type="button" onClick={event => { event.stopPropagation(); movePhoto(1); }} aria-label="Next photo" style={{ position: 'absolute', right: '1.2rem', color: '#f8f0e5' }} data-testid="button-next-photo">
             <ChevronRight size={20} />
