@@ -1,0 +1,14 @@
+{
+  "buildCommand": "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/love-story build",
+  "outputDirectory": "artifacts/love-story/dist/public",
+  "functions": {
+    "api/[...path].ts": {
+      "runtime": "nodejs22.x",
+      "maxDuration": 10,
+      "memory": 512
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

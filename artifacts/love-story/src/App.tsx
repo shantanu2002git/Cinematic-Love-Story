@@ -254,6 +254,10 @@ function Home() {
   const handlePhotoFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      event.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setPhotoForm(form => ({ ...form, src: String(reader.result) }));
     reader.readAsDataURL(file);
