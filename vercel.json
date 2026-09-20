@@ -1,5 +1,6 @@
 {
-  "buildCommand": "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/love-story build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/love-story build",
   "outputDirectory": "artifacts/love-story/dist/public",
   "rewrites": [
     {
