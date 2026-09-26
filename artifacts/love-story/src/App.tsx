@@ -28,7 +28,7 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
-const storyApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const storyApiBaseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const storyApiUrl = `${storyApiBaseUrl}/api/story`;
 
 type Photo = {
