@@ -3,6 +3,7 @@
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
+    "allowImportingTsExtensions": true,
     "outDir": "dist",
     "rootDir": "src",
     "types": ["node"]

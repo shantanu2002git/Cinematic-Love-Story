@@ -1,8 +1,12 @@
-import express, { type Express } from "express";
+import express, {
+  type ErrorRequestHandler,
+  type Express,
+} from "express";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import cors from "cors";
-import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+import { pinoHttp, type ReqId } from "pino-http";
+import router from "./routes/index.ts";
+import { logger } from "./lib/logger.ts";
 
 const app: Express = express();
 const configuredOrigins = process.env.CORS_ORIGIN
@@ -21,14 +25,14 @@ app.use(
   pinoHttp({
     logger,
     serializers: {
-      req(req) {
+      req(req: IncomingMessage & { id: ReqId }) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      res(res: ServerResponse) {
         return {
           statusCode: res.statusCode,
         };
@@ -38,7 +42,10 @@ app.use(
 );
 app.use(
   cors({
-    origin(origin, callback) {
+    origin(
+      origin: string | undefined,
+      callback: (error: Error | null, allow?: boolean) => void,
+    ) {
       callback(null, !origin || allowedOrigins.has(origin));
     },
   }),
@@ -52,9 +59,11 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", router);
 
-app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+const handleError: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
   const message = error instanceof Error ? error.message : "Unexpected server error";
   res.status(500).json({ message });
-});
+};
+
+app.use(handleError);
 
 export default app;
