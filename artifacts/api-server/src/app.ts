@@ -1,6 +1,8 @@
 import express, {
   type ErrorRequestHandler,
-  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
 } from "express";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import cors from "cors";
@@ -8,7 +10,7 @@ import { pinoHttp, type ReqId } from "pino-http";
 import router from "./routes/index.ts";
 import { logger } from "./lib/logger.ts";
 
-const app: Express = express();
+const app = express();
 const configuredOrigins = process.env.CORS_ORIGIN
   ?.split(",")
   .map((origin) => origin.trim())
@@ -59,7 +61,12 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", router);
 
-const handleError: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
+const handleError: ErrorRequestHandler = (
+  error: unknown,
+  _req: Request,
+  res: Response,
+  _next: NextFunction,
+) => {
   const message = error instanceof Error ? error.message : "Unexpected server error";
   res.status(500).json({ message });
 };

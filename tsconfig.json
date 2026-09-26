@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
   "compileOnSave": false,
-  "files": [],
+  "files": ["./api/[...path].ts"],
   "references": [
     {
       "path": "./lib/db"
