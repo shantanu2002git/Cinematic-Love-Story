@@ -196,6 +196,7 @@
 .timeline-layout { display: grid; grid-template-columns: .55fr 1.45fr; gap: clamp(3rem, 10vw, 10rem); }
 .timeline-intro { position: sticky; top: 120px; align-self: start; }
 .timeline-intro .body-copy { max-width: 270px; margin-top: 1.8rem; }
+.story-sync-error { margin: 0 0 1.25rem; color: hsl(var(--destructive)); font-size: .875rem; line-height: 1.5; }
 .timeline-list { border-top: 1px solid hsl(var(--border)); }
 .story-skeleton-list { display: grid; gap: 1px; }
 .story-skeleton { position: relative; overflow: hidden; background: hsl(var(--muted)); }

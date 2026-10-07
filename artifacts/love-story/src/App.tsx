@@ -28,7 +28,9 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
-const storyApiUrl = '/api/story';
+const storyApiBaseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+const storyApiUrl = storyApiBaseUrl ? `${storyApiBaseUrl}/api/story` : null;
+const storyPhotosApiUrl = storyApiUrl ? `${storyApiUrl}/photos` : null;
 
 type Photo = {
   id: string;
@@ -66,34 +68,24 @@ const reasons = [
 
 ];
 
-const archiveVersion = 'single-static-record-v1';
-
-function readStored<T>(key: string, fallback: T): T {
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) as T : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-async function saveStory(payload: StoryPayload): Promise<void> {
+async function saveStoryText(coordinates: TimelineItem[]): Promise<void> {
+  if (!storyApiUrl) throw new Error('VITE_API_URL is required to save the shared story.');
   const response = await fetch(storyApiUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ coordinates }),
   });
-  if (!response.ok) throw new Error(`Story save failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Story text save failed: ${response.status}`);
 }
 
-function readInitialArchive<T>(key: string, fallback: T): T {
-  if (window.localStorage.getItem('love-story-archive-version') !== archiveVersion) {
-    window.localStorage.removeItem('love-story-photos');
-    window.localStorage.removeItem('love-story-timeline');
-    window.localStorage.setItem('love-story-archive-version', archiveVersion);
-    return fallback;
-  }
-  return readStored(key, fallback);
+async function saveStoryPhotos(photos: Photo[]): Promise<void> {
+  if (!storyPhotosApiUrl) throw new Error('VITE_API_URL is required to save shared photos.');
+  const response = await fetch(storyPhotosApiUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ photos }),
+  });
+  if (!response.ok) throw new Error(`Story photo save failed: ${response.status}`);
 }
 
 function Home() {
@@ -108,8 +100,9 @@ function Home() {
   const [copied, setCopied] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const [isStoryLoading, setIsStoryLoading] = useState(true);
-  const [photos, setPhotos] = useState<Photo[]>(() => readInitialArchive('love-story-photos', initialPhotos));
-  const [timeline, setTimeline] = useState<TimelineItem[]>(() => readInitialArchive('love-story-timeline', initialTimeline));
+  const [storySyncError, setStorySyncError] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
+  const [timeline, setTimeline] = useState<TimelineItem[]>(initialTimeline);
   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
   const [isAddingFeeling, setIsAddingFeeling] = useState(false);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -122,14 +115,12 @@ function Home() {
   const letterButtonRef = useRef<HTMLButtonElement>(null);
   const hasLoadedFromApi = useRef(false);
 
-  useEffect(() => { window.localStorage.setItem('love-story-photos', JSON.stringify(photos)); }, [photos]);
-  useEffect(() => { window.localStorage.setItem('love-story-timeline', JSON.stringify(timeline)); }, [timeline]);
-
   useEffect(() => {
     let cancelled = false;
     const loadStory = async () => {
       try {
-        const response = await fetch(storyApiUrl, { signal: AbortSignal.timeout(1200) });
+        if (!storyApiUrl) throw new Error('VITE_API_URL is required to load the shared story.');
+        const response = await fetch(storyApiUrl, { signal: AbortSignal.timeout(10_000) });
         if (!response.ok) throw new Error(`Story request failed: ${response.status}`);
         const stored = await response.json() as StoryPayload;
         if (cancelled) return;
@@ -137,13 +128,17 @@ function Home() {
           setPhotos(stored.photos);
           setTimeline(stored.coordinates);
         } else {
-          await saveStory({ photos, coordinates: timeline }).catch(() => undefined);
+          await saveStoryPhotos(photos);
+          await saveStoryText(timeline);
         }
+        hasLoadedFromApi.current = true;
+        setStorySyncError(null);
       } catch {
-        // Local storage remains the offline fallback when the API is unavailable.
+        if (!cancelled) {
+          setStorySyncError('Story service is unavailable. Changes may not be saved for other visitors.');
+        }
       } finally {
         if (!cancelled) {
-          hasLoadedFromApi.current = true;
           setIsStoryLoading(false);
         }
       }
@@ -154,8 +149,33 @@ function Home() {
 
   useEffect(() => {
     if (!hasLoadedFromApi.current) return;
-    void saveStory({ photos, coordinates: timeline }).catch(() => undefined);
-  }, [photos, timeline]);
+    let cancelled = false;
+    void saveStoryText(timeline)
+      .then(() => {
+        if (!cancelled) setStorySyncError(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStorySyncError('Story text could not be saved to the shared story.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [timeline]);
+
+  useEffect(() => {
+    if (!hasLoadedFromApi.current) return;
+    let cancelled = false;
+    void saveStoryPhotos(photos)
+      .then(() => {
+        if (!cancelled) setStorySyncError(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStorySyncError('Photos could not be saved to the shared story.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [photos]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume / 100;
@@ -373,6 +393,7 @@ function Home() {
       <section className="section timeline" id="days" aria-labelledby="days-title">
         <div className="section-inner timeline-layout">
           <div className="timeline-intro reveal">
+            {storySyncError && <p className="story-sync-error" role="alert">{storySyncError}</p>}
             <div className="section-kicker">02 / The shape of us</div>
             <h2 className="section-heading" id="days-title">A few<br /><em>coordinates.</em></h2>
             <p className="body-copy">The dates are only pins on a map. The real story is everything that happened between them.</p>

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: cinematic-love-story-api
+    runtime: node
+    region: singapore
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server build
+    startCommand: pnpm --filter @workspace/api-server start
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: cinematic-love-story
+      - key: CORS_ORIGIN
+        value: https://cinematic-love-story-three.vercel.app

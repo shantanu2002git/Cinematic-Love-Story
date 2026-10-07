@@ -18,7 +18,19 @@ let databasePromise: Promise<Db> | undefined;
 
 export function storyCollection(): Promise<Collection<StoryDocument>> {
   if (!databasePromise) {
-    databasePromise = client.connect().then(connectedClient => connectedClient.db(databaseName));
+    databasePromise = client
+      .connect()
+      .then(async (connectedClient) => {
+        const database = connectedClient.db(databaseName);
+        await database
+          .collection<StoryDocument>("story_archive")
+          .createIndex({ key: 1 }, { unique: true });
+        return database;
+      })
+      .catch((error: unknown) => {
+        databasePromise = undefined;
+        throw error;
+      });
   }
   return databasePromise.then(database => database.collection<StoryDocument>("story_archive"));
 }
@@ -33,7 +45,6 @@ export type StoryPhoto = {
 };
 
 export type StoryCoordinate = {
-  id: string;
   date: string;
   title: string;
   copy: string;

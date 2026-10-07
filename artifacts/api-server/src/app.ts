@@ -15,13 +15,10 @@ const configuredOrigins = process.env.CORS_ORIGIN
   ?.split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const allowedOrigins = new Set(
-  configuredOrigins?.length
-    ? configuredOrigins
-    : process.env.NODE_ENV === "production"
-      ? []
-      : ["http://localhost:5173", "http://127.0.0.1:5173"],
-);
+if (process.env.NODE_ENV === "production" && !configuredOrigins?.length) {
+  throw new Error("CORS_ORIGIN must be set in the API server environment.");
+}
+const allowedOrigins = new Set(configuredOrigins ?? []);
 
 app.use(
   pinoHttp({
@@ -48,11 +45,16 @@ app.use(
       origin: string | undefined,
       callback: (error: Error | null, allow?: boolean) => void,
     ) {
-      callback(null, !origin || allowedOrigins.has(origin));
+      callback(
+        null,
+        !origin ||
+          allowedOrigins.has(origin) ||
+          process.env.NODE_ENV !== "production",
+      );
     },
   }),
 );
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/health", (_req, res) => {
@@ -67,8 +69,25 @@ const handleError: ErrorRequestHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
-  const message = error instanceof Error ? error.message : "Unexpected server error";
-  res.status(500).json({ message });
+  if (
+    error instanceof SyntaxError &&
+    "type" in error &&
+    error.type === "entity.parse.failed"
+  ) {
+    res.status(400).json({ message: "Request body must be valid JSON" });
+    return;
+  }
+
+  const errorName = error instanceof Error ? error.name : "UnexpectedError";
+  const message =
+    error instanceof Error
+      ? error.message.replace(
+          /mongodb(?:\+srv)?:\/\/[^\s"'<>]+/gi,
+          "[REDACTED MONGODB URI]",
+        )
+      : "Unexpected server error";
+  logger.error({ errorName, message }, "API request failed");
+  res.status(500).json({ message: "Internal server error" });
 };
 
 app.use(handleError);
