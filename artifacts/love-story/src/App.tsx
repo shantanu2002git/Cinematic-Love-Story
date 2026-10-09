@@ -55,10 +55,6 @@ const initialPhotos: Photo[] = [
 type TimelineItem = { date: string; title: string; copy: string };
 type StoryPayload = { photos: Photo[]; coordinates: TimelineItem[] };
 
-const initialTimeline: TimelineItem[] = [
-  { date: '03 / 18 / 19', title: 'The first hello', copy: 'A crowded room, a borrowed pen, and the strange certainty that I wanted to hear the rest of your story.' },
-];
-
 const reasons = [
   ['01', 'You make distance feel smaller', 'No matter how busy the day gets, a few words from you always make me feel closer.'],
   ['02', 'You listen with your whole face', 'The way you look at a story makes people brave enough to finish it.'],
@@ -102,7 +98,7 @@ function Home() {
   const [isStoryLoading, setIsStoryLoading] = useState(true);
   const [storySyncError, setStorySyncError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
-  const [timeline, setTimeline] = useState<TimelineItem[]>(initialTimeline);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
   const [isAddingFeeling, setIsAddingFeeling] = useState(false);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -120,16 +116,13 @@ function Home() {
     const loadStory = async () => {
       try {
         if (!storyApiUrl) throw new Error('VITE_API_URL is required to load the shared story.');
-        const response = await fetch(storyApiUrl, { signal: AbortSignal.timeout(10_000) });
+        const response = await fetch(storyApiUrl, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
         if (!response.ok) throw new Error(`Story request failed: ${response.status}`);
         const stored = await response.json() as StoryPayload;
         if (cancelled) return;
+        setTimeline(stored.coordinates);
         if (stored.photos.length || stored.coordinates.length) {
           setPhotos(stored.photos);
-          setTimeline(stored.coordinates);
-        } else {
-          await saveStoryPhotos(photos);
-          await saveStoryText(timeline);
         }
         hasLoadedFromApi.current = true;
         setStorySyncError(null);

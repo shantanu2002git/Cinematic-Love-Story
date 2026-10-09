@@ -49,6 +49,7 @@ function isStoryPhotos(value: unknown): value is StoryPhoto[] {
 
 router.get("/story", async (_req, res, next) => {
   try {
+    res.set("Cache-Control", "no-store");
     const collection = await storyCollection();
     const document = await collection.findOne({ key: "main" });
     res.json({ photos: document?.photos ?? [], coordinates: document?.coordinates ?? [] });
